@@ -53,43 +53,76 @@ class thread_pool  {
         ~executant_thread() {}
         void operator()() {
             while(true) {
-                std::unique_lock<std::mutex> locker(pool_ptr->lock_for_queuecheck);
-                pool_ptr->queuecheck.wait(locker);
                 if (!pool_ptr->tasks.empty()) {
-                    std::pair<std::function <return_type(arg_types...)>, arg_types... > funct = pool_ptr->tasks.extract();
+                    std::pair<std::function <return_type(arg_types...)>, arg_types... > funct = pool_ptr->tasks.wait_extract();
                     funct.first(funct.second);
                 }
             }
         }
     };
 
-//    struct start_executent_thread {
-//        void operator()(thread_pool* pool_ptr, int id) {
-//            thread_pool::executant_thread executant(pool_ptr, id);
-//            while (true) {
-//                executant.listen();
-//            }
-//        }
-//    };
-
-
     class concurrent_vector {
         std::vector<std::pair<std::function<return_type(arg_types ...) >, arg_types...  > > vect;
         std::mutex locker_vect;
+        std::condition_variable queuecheck;
     public:
         concurrent_vector() {}
         ~concurrent_vector() {}
+
         std::pair<std::function <return_type(arg_types...)>, arg_types... > extract() {
-            locker_vect.lock();
-            std::pair<std::function <return_type(arg_types...)>, arg_types... > answer = vect.back();
-            vect.pop_back();
-            locker_vect.unlock();
+            std::pair<std::function <return_type(arg_types...)>, arg_types... > answer;
+            while (true) {
+                locker_vect.lock();
+                if (!vect.empty()) {
+                    answer = vect.back();
+                    vect.pop_back();
+                    locker_vect.unlock();
+                    break;
+                }
+                locker_vect.unlock();
+            }
             return answer;
         }
+
+        std::pair<std::function <return_type(arg_types...)>, arg_types... > wait_extract() {
+            std::pair<std::function <return_type(arg_types...)>, arg_types... > answer;
+            while (true) {
+                std::unique_lock<std::mutex> locker(locker_vect);
+                queuecheck.wait(locker);
+                if (!vect.empty()) {
+                    answer = vect.back();
+                    vect.pop_back();
+                    break;
+                }
+            }
+            return answer;
+        }
+
+        std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> try_extract() {
+            std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> answer;
+            answer.second = false;
+            if (locker_vect.try_lock()) {
+                if (!vect.empty()) {
+                    answer.second = true;
+                    answer.first = vect.back();
+                    vect.pop_back();
+                    locker_vect.unlock();
+                }
+            }
+            return answer;
+        }
+
         void push(std::pair<std::function<return_type(arg_types ...) >, arg_types...  > func_with_args) {
             locker_vect.lock();
             vect.push_back(func_with_args);
             locker_vect.unlock();
+            queuecheck.notify_one();
+        }
+
+        void allow_to_exhaust() {
+            while (!vect.empty()) {
+                queuecheck.notify_one();
+            }
         }
 
         bool empty() {
@@ -128,14 +161,11 @@ public :
             throw (my::exception("This pool was closed!"));
         }
         tasks.push(std::make_pair(func, args...));
-        queuecheck.notify_one();
     }
 
     void close() {
         finish_flag = true;
-        while (!tasks.empty()) {
-            queuecheck.notify_one();
-        }
+        tasks.allow_to_exhaust();
         for (int i = 0; i < executant_threads.size(); ++i) {
             executant_threads[i].interrupt();
             std::cout<<"нить завершилась"<<std::endl;
