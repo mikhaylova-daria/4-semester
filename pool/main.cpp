@@ -39,12 +39,9 @@ class thread_pool  {
             std::unique_lock<std::mutex> locker(pool_ptr->lock_for_queuecheck);
             pool_ptr->queuecheck.wait(locker);
             if (!pool_ptr->tasks.empty()) {
-                std::pair<std::function <return_type(arg_types...)>, arg_types... > funct = pool_ptr->tasks.back();
-                pool_ptr->tasks.pop_back();
-                locker.unlock();
+                std::pair<std::function <return_type(arg_types...)>, arg_types... > funct = pool_ptr->tasks.extract();
                 funct.first(funct.second);
             }
-
         }
     };
 
@@ -58,22 +55,34 @@ class thread_pool  {
     };
 
 
-//    class concurrent_vector {
-//        std::vector<std::pair<std::function<return_type(arg_types ...) >, arg_types...  > > vect;
-//    public:
-//        concurrent_vector() {}
-//        ~concurrent_vector() {}
-//        std::pair<std::function <return_type(arg_types...)>, arg_types... > top() {
-//            std::pair<std::function <return_type(arg_types...)>, arg_types... > answer = vect.front()
-//            return
-//        }
+    class concurrent_vector {
+        std::vector<std::pair<std::function<return_type(arg_types ...) >, arg_types...  > > vect;
+        std::mutex locker_vect;
+    public:
+        concurrent_vector() {}
+        ~concurrent_vector() {}
+        std::pair<std::function <return_type(arg_types...)>, arg_types... > extract() {
+            locker_vect.lock();
+            std::pair<std::function <return_type(arg_types...)>, arg_types... > answer = vect.back();
+            vect.pop_back();
+            locker_vect.unlock();
+            return answer;
+        }
+        void push(std::pair<std::function<return_type(arg_types ...) >, arg_types...  > func_with_args) {
+            locker_vect.lock();
+            vect.push_back(func_with_args);
+            locker_vect.unlock();
+        }
 
-//    };
+        bool empty() {
+            return vect.empty();
+        }
+    };
 
 public:
     bool finish;
     std::vector<boost::thread> executant_threads;
-    std::vector<std::pair<std::function<return_type(arg_types ...) >, arg_types...  > > tasks;
+    concurrent_vector tasks;
     std::mutex lock_for_queuecheck;
     std::condition_variable queuecheck;
 public :
@@ -96,9 +105,7 @@ public :
     }
 
     void execute(std::function<return_type(arg_types...)> func, arg_types ... args) {
-        lock_for_queuecheck.lock();
-        tasks.push_back(std::make_pair(func, args...));
-        lock_for_queuecheck.unlock();
+        tasks.push(std::make_pair(func, args...));
         queuecheck.notify_one();
     }
 };
