@@ -84,7 +84,6 @@ public :
     void execute(std::function<return_type(arg_types...)> func, arg_types ... args) {
         lock_for_queuecheck.lock();
         tasks.push_back(std::make_pair(func, args...));
-   //     std::cout<<"!!"<<std::endl;
         lock_for_queuecheck.unlock();
     }
 };
