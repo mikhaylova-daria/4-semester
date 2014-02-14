@@ -44,10 +44,6 @@ class thread_pool  {
     class executant_thread {
         int id;
         thread_pool* pool_ptr;
-        struct finish_flag {
-
-        };
-
     public:
         executant_thread(thread_pool* _pool_ptr, int _id): pool_ptr(_pool_ptr), id(_id) {}
         ~executant_thread() {}
@@ -69,74 +65,21 @@ class thread_pool  {
         concurrent_vector() {}
         ~concurrent_vector() {}
 
-        std::pair<std::function <return_type(arg_types...)>, arg_types... > extract() {
-            std::pair<std::function <return_type(arg_types...)>, arg_types... > answer;
-            while (true) {
-                locker_vect.lock();
-                if (!vect.empty()) {
-                    answer = vect.back();
-                    vect.pop_back();
-                    locker_vect.unlock();
-                    break;
-                }
-                locker_vect.unlock();
-            }
-            return answer;
-        }
-
-        std::pair<std::function <return_type(arg_types...)>, arg_types... > wait_extract() {
-            std::pair<std::function <return_type(arg_types...)>, arg_types... > answer;
-            while (true) {
-                std::unique_lock<std::mutex> locker(locker_vect);
-                queuecheck.wait(locker);
-                if (!vect.empty()) {
-                    answer = vect.back();
-                    vect.pop_back();
-                    break;
-                }
-            }
-            return answer;
-        }
-
-        std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> try_extract() {
-            std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> answer;
-            answer.second = false;
-            if (locker_vect.try_lock()) {
-                if (!vect.empty()) {
-                    answer.second = true;
-                    answer.first = vect.back();
-                    vect.pop_back();
-                    locker_vect.unlock();
-                }
-            }
-            return answer;
-        }
-
-        void push(std::pair<std::function<return_type(arg_types ...) >, arg_types...  > func_with_args) {
-            locker_vect.lock();
-            vect.push_back(func_with_args);
-            locker_vect.unlock();
-            queuecheck.notify_one();
-        }
-
-        void allow_to_exhaust() {
-            while (!vect.empty()) {
-                queuecheck.notify_one();
-            }
-        }
-
+        std::pair<std::function <return_type(arg_types...)>, arg_types... > extract();
+        std::pair<std::function <return_type(arg_types...)>, arg_types... > wait_extract();
+        std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> try_extract();
+        void push(std::pair<std::function<return_type(arg_types ...) >, arg_types...  > func_with_args);
+        void allow_to_exhaust();
         bool empty() {
             return vect.empty();
         }
     };
 
-public:
     bool finish_flag = false;
     bool start_flag = false;
     std::vector<boost::thread> executant_threads;
     concurrent_vector tasks;
-    std::mutex lock_for_queuecheck;
-    std::condition_variable queuecheck;
+
 public :
     thread_pool() {}
     ~thread_pool() {
@@ -172,6 +115,77 @@ public :
         }
     }
 };
+
+
+
+template <typename return_type, typename ... arg_types>
+std::pair<std::function <return_type(arg_types...)>, arg_types... >
+                                            thread_pool<return_type, arg_types...>::concurrent_vector::extract() {
+    std::pair<std::function <return_type(arg_types...)>, arg_types... > answer;
+    while (true) {
+        locker_vect.lock();
+        if (!vect.empty()) {
+            answer = vect.back();
+            vect.pop_back();
+            locker_vect.unlock();
+            break;
+        }
+        locker_vect.unlock();
+    }
+    return answer;
+}
+
+template <typename return_type, typename ... arg_types>
+std::pair<std::function <return_type(arg_types...)>, arg_types... >
+                                       thread_pool<return_type, arg_types...>::concurrent_vector::wait_extract() {
+    std::pair<std::function <return_type(arg_types...)>, arg_types... > answer;
+    while (true) {
+        std::unique_lock<std::mutex> locker(locker_vect);
+        queuecheck.wait(locker);
+        if (!vect.empty()) {
+            answer = vect.back();
+            vect.pop_back();
+            break;
+        }
+    }
+    return answer;
+}
+
+
+
+template <typename return_type, typename ... arg_types>
+std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool >
+                                       thread_pool<return_type, arg_types...>::concurrent_vector::try_extract() {
+    std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> answer;
+    answer.second = false;
+    if (locker_vect.try_lock()) {
+        if (!vect.empty()) {
+            answer.second = true;
+            answer.first = vect.back();
+            vect.pop_back();
+            locker_vect.unlock();
+        }
+    }
+    return answer;
+}
+
+
+template <typename return_type, typename ... arg_types>
+void thread_pool<return_type, arg_types...>::concurrent_vector::push(std::pair<std::function<return_type(arg_types ...) >, arg_types...  > func_with_args) {
+    locker_vect.lock();
+    vect.push_back(func_with_args);
+    locker_vect.unlock();
+    queuecheck.notify_one();
+}
+
+
+template <typename return_type, typename ... arg_types>
+void thread_pool<return_type, arg_types...>::concurrent_vector::allow_to_exhaust() {
+    while (!vect.empty()) {
+        queuecheck.notify_one();
+    }
+}
+
 
 
 int main()
