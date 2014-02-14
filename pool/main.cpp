@@ -97,26 +97,33 @@ class thread_pool  {
 
 public:
     bool finish_flag = false;
+    bool start_flag = false;
     std::vector<boost::thread> executant_threads;
     concurrent_vector tasks;
     std::mutex lock_for_queuecheck;
     std::condition_variable queuecheck;
 public :
-    thread_pool() {
-        executant_threads = std::vector<boost::thread>(4);
-        for (int i = 0; i < executant_threads.size(); ++i) {
-            executant_threads[i] = boost::thread {start_executent_thread(), this, i};
-        }
-    }
+    thread_pool() {}
     ~thread_pool() {
         if (!finish_flag) {
             this->close();
         }
     }
 
+    void start() {
+        start_flag = true;
+        executant_threads = std::vector<boost::thread>(4);
+        for (int i = 0; i < executant_threads.size(); ++i) {
+            executant_threads[i] = boost::thread {start_executent_thread(), this, i};
+        }
+    }
+
     void execute(std::function<return_type(arg_types...)> func, arg_types ... args) {
+        if (!start_flag) {
+            this->start();
+        }
         if (finish_flag) {
-            throw (my::exception("This pool was closed"));
+            throw (my::exception("This pool was closed!"));
         }
         tasks.push(std::make_pair(func, args...));
         queuecheck.notify_one();
