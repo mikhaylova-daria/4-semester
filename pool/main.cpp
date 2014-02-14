@@ -51,24 +51,26 @@ class thread_pool  {
     public:
         executant_thread(thread_pool* _pool_ptr, int _id): pool_ptr(_pool_ptr), id(_id) {}
         ~executant_thread() {}
-        void listen() {
-            std::unique_lock<std::mutex> locker(pool_ptr->lock_for_queuecheck);
-            pool_ptr->queuecheck.wait(locker);
-            if (!pool_ptr->tasks.empty()) {
-                std::pair<std::function <return_type(arg_types...)>, arg_types... > funct = pool_ptr->tasks.extract();
-                funct.first(funct.second);
+        void operator()() {
+            while(true) {
+                std::unique_lock<std::mutex> locker(pool_ptr->lock_for_queuecheck);
+                pool_ptr->queuecheck.wait(locker);
+                if (!pool_ptr->tasks.empty()) {
+                    std::pair<std::function <return_type(arg_types...)>, arg_types... > funct = pool_ptr->tasks.extract();
+                    funct.first(funct.second);
+                }
             }
         }
     };
 
-    struct start_executent_thread {
-        void operator()(thread_pool* pool_ptr, int id) {
-            thread_pool::executant_thread executant(pool_ptr, id);
-            while (true) {
-                executant.listen();
-            }
-        }
-    };
+//    struct start_executent_thread {
+//        void operator()(thread_pool* pool_ptr, int id) {
+//            thread_pool::executant_thread executant(pool_ptr, id);
+//            while (true) {
+//                executant.listen();
+//            }
+//        }
+//    };
 
 
     class concurrent_vector {
@@ -114,7 +116,7 @@ public :
         start_flag = true;
         executant_threads = std::vector<boost::thread>(4);
         for (int i = 0; i < executant_threads.size(); ++i) {
-            executant_threads[i] = boost::thread {start_executent_thread(), this, i};
+            executant_threads[i] = boost::thread {executant_thread(this, i)};
         }
     }
 
