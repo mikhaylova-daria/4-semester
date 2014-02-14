@@ -21,6 +21,22 @@ struct functor1 {
 };
 
 
+namespace my {
+
+class exception: public std::exception {
+private:
+    std::string _what;
+public:
+    exception(const char * _what) throw() {
+           this->_what = _what;
+    }
+    const char* what() const throw(){
+        return _what.c_str();
+    }
+    ~exception() throw(){}
+};
+}
+
 
 template <typename return_type, typename ... arg_types>
 class thread_pool  {
@@ -80,20 +96,34 @@ class thread_pool  {
     };
 
 public:
-    bool finish;
+    bool finish_flag = false;
     std::vector<boost::thread> executant_threads;
     concurrent_vector tasks;
     std::mutex lock_for_queuecheck;
     std::condition_variable queuecheck;
 public :
     thread_pool() {
-        finish = false;
         executant_threads = std::vector<boost::thread>(4);
         for (int i = 0; i < executant_threads.size(); ++i) {
             executant_threads[i] = boost::thread {start_executent_thread(), this, i};
         }
     }
     ~thread_pool() {
+        if (!finish_flag) {
+            this->close();
+        }
+    }
+
+    void execute(std::function<return_type(arg_types...)> func, arg_types ... args) {
+        if (finish_flag) {
+            throw (my::exception("This pool was closed"));
+        }
+        tasks.push(std::make_pair(func, args...));
+        queuecheck.notify_one();
+    }
+
+    void close() {
+        finish_flag = true;
         while (!tasks.empty()) {
             queuecheck.notify_one();
         }
@@ -101,12 +131,6 @@ public :
             executant_threads[i].interrupt();
             std::cout<<"нить завершилась"<<std::endl;
         }
-
-    }
-
-    void execute(std::function<return_type(arg_types...)> func, arg_types ... args) {
-        tasks.push(std::make_pair(func, args...));
-        queuecheck.notify_one();
     }
 };
 
@@ -117,6 +141,12 @@ int main()
     thread_pool<void, int> first_pool;
     for (int i = 0; i < number; ++i) {
         first_pool.execute(functor1(), i);
+    }
+    first_pool.close();
+    try {
+        first_pool.execute(functor1(), 0);
+    } catch (my::exception exp) {
+        std::cout<<exp.what()<<std::endl;
     }
     }
     for (int i = 1; i < number; ++i) {
