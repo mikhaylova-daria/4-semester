@@ -6,12 +6,11 @@
 #include <functional>
 #include <mutex>
 #include <condition_variable>
-#include <unordered_map>
 #include <queue>
 #include <assert.h>
 
 #define number 10000 // al: static const int - не подойдет? зачем дефайн?
-
+                    //d: избегаю глобальные переменные по идеалогическим соображениям. Разве define не лучше?
 using namespace std;
 
 int check_array[number];
@@ -19,11 +18,10 @@ int check_array[number];
 struct functor1 {
     void operator()(int i) {
         int j = 0;
-        for( int k = 0; k < 1000000; k++ ) {
+        for( int k = 0; k < 1; k++ ) {//d:если сильно накрутить счётчик, работает медленно, но не виснет :)
             j+= 1;
         }
         check_array[i] = i;
-        //std::cout<<"Hello, world!"<<i<<std::endl;
     }
 };
 
@@ -45,66 +43,89 @@ public:
 }
 
 
+
+
 template <typename return_type, typename ... arg_types>
 class thread_pool  {
 
+    /*d: Общая идея: при запуске thread_pool создаётся некоторое количество
+    потоков с executant_thread в качестве исполняемого функтора. Оператор () этого класса в бесконечном цикле
+    берёт задачи из потокобезопасной очереди, которая принадлежит классу thread_pool. Каждый executant_thread
+    знает ссылку на свой thread_pool и умеет отслеживать его состояние: ALLOWED означает, что в очереди больше
+    нет задач и пользователь не собирается их добавлять - условие выхода из цикла, т.е. завершения потока.
+    */
     class executant_thread {
+        thread_pool& pool_ptr;
         int id;
-        thread_pool* pool_ptr;
-    public:        executant_thread(thread_pool* _pool_ptr, int _id): pool_ptr(_pool_ptr), id(_id)
-        {
-            assert(_pool_ptr != 0);
-        }
+    public:
+        executant_thread(thread_pool& _pool_ptr, int _id): pool_ptr(_pool_ptr), id(_id) {}
         ~executant_thread() {}
         void operator()() {
             while(true) {
-                std::cout << "Try get" << std::endl;
-                if (pool_ptr->state == ALLOWED) {
-                    pool_ptr->state_of_thread[id] = 0;
+                ///std::cout << "Try get" << std::endl;
+                if (pool_ptr.state == ALLOWED) {
+                    pool_ptr.state_of_thread[id] = 0;
                     break;
                 } else {
-                    pool_ptr->state_of_thread[id] = 1;
+                    pool_ptr.state_of_thread[id] = 1;
                 }
-                typename std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> funct = pool_ptr->tasks.wait_extract();
+                typename std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> funct = pool_ptr.
+                        tasks.wait_extract();
                 if (funct.second) {
-                    std:: cout << "Success" << std::endl;
+                   /// std:: cout << "Success" << std::endl;
                     funct.first.first(funct.first.second);
-                    pool_ptr->state_of_thread[id] = 0;
-                } else {
-                    std::cout << "Null task" << std::endl;
+                    pool_ptr.state_of_thread[id] = 0;
+                    /*d: state_of_thread[id] нужен для возможности проверки, выполнил ли поток свою последнюю
+                     *задачу до конца (см. метод concurrent_vector::allow_to_exhaust() (реализация под классом thread_pool))
+                     *Работает так:
+                     *если извне обещано, что новых задач не будет (ALLOWED) и последняя задача выполнена,
+                     *то значение становится равным 0 и больше не меняется, если извне не обещано ALLOWED, то
+                     * 1 означает выполнение задачи или нахождение в ожидании доступа к очереди задач, а значение 0
+                     *принимается в период между завершением последней выполненной задачи и проверкой условия ALLOWED
+                      */
                 }
             }
         }
     };
 
-    // al: можешь пояснить, почему ты делаешь обертку над стандартным вектором, а не очередью, которая по смыслу подходит больше?
+    /*d:
+     *потокобезопасная очередь.
+     *Реализация методов после класса thread_pool
+     */
     class concurrent_vector {
-        std::vector<std::pair<std::function<return_type(arg_types ...) >, arg_types...  > > vect;
+        std::queue<std::pair<std::function<return_type(arg_types ...) >, arg_types...  > > ordinary_queue;
         std::mutex locker_vect;
         std::condition_variable queuecheck;
-        thread_pool* pool_ptr;
+        thread_pool& pool_ptr;
 
     public:
         concurrent_vector(){}
-        concurrent_vector(thread_pool* _pool_ptr):pool_ptr(_pool_ptr) {}
+        concurrent_vector(thread_pool& _pool_ptr):pool_ptr(_pool_ptr) {}
         ~concurrent_vector() {}
-        std::pair<std::function <return_type(arg_types...)>, arg_types... > extract();
         std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> wait_extract();
-        std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> try_extract();
         void push(std::pair<std::function<return_type(arg_types ...) >, arg_types...  > func_with_args);
         void allow_to_exhaust();
         bool empty() {
-            return vect.empty();
+            return ordinary_queue.empty();
         }
 
     };
-    enum state_t {NON_STARTED = -1, STARTED, FINISHED, ALLOWED, CLOSED} state;
-    std::vector<boost::thread> executant_threads;
-    std::vector<atomic<bool>> state_of_thread;
-    concurrent_vector tasks;
 
+    concurrent_vector tasks;
+    enum state_t {NON_STARTED = -1, STARTED, FINISHED, ALLOWED, CLOSED} state;
+    /*d: состояния thread_pool:
+     *NON_STARTED - потоки не запущены
+     *STARTED - потоки запущены
+     *FINISHED - пользователь объявил, что новых задач не будет
+     *ALLOWED - очередь  пуста, но последние задачи в процессе выполнения
+     *CLOSED - очередь пуста, все задачи гарантированно выполнены, thread_pool как ресурс больше не доступен
+     */
+    std::vector<atomic<bool>> state_of_thread;
+    /* d: великий смысл этой штуки см. в методе concurrent_vector::allow_to_exhaust()
+     */
+    std::vector<boost::thread> executant_threads;
 public :
-    thread_pool() : tasks(this), state(NON_STARTED), state_of_thread(4), executant_threads(4) {
+    thread_pool(int size = 4) : tasks((*this)), state(NON_STARTED), state_of_thread(size), executant_threads(size) {
     }
     ~thread_pool() {
         if (state != CLOSED) {
@@ -115,8 +136,8 @@ public :
     void start() {
         if (state == NON_STARTED) {
             state = STARTED;
-            for (int i = 0; i < executant_threads.size(); ++i) {
-                executant_threads[i] = boost::thread {executant_thread(this, i)};
+            for (unsigned int i = 0; i < executant_threads.size(); ++i) {
+                executant_threads[i] = boost::thread {executant_thread(*this, i)};
             }
         } else {
             throw (my::exception("Wrong state: NON_STARTED is expected"));
@@ -136,11 +157,7 @@ public :
     void close() {
         state = FINISHED;
         tasks.allow_to_exhaust();
-        for (int i = 0; i < executant_threads.size(); ++i) {
-            // al: хорошо бы иметь еще возможность дождаться выполнения всех задач, а не прервать выполнение потоков.
-            // возможность прервать всех - это тоже хорошо, но ей нужно пользоваться, когда мы вежливо уже попросили закончить работу.
-            // allow_to_exhaust - возвращает тогда, когда очередь задач пуста, а не когда все задачи выполнены, поэтому мы можем оборвать чью то работу.
-
+        for (unsigned int i = 0; i < executant_threads.size(); ++i) {
             executant_threads[i].join();
             std::cout<<"нить завершилась"<<std::endl;
         }
@@ -149,94 +166,58 @@ public :
 };
 
 
-
-//template <typename return_type, typename ... arg_types>
-//std::pair<std::function <return_type(arg_types...)>, arg_types... >
-//                                            thread_pool<return_type, arg_types...>::concurrent_vector::extract() {
-//    std::pair<std::function <return_type(arg_types...)>, arg_types... > answer;
-//    while (true) {
-//        locker_vect.lock();
-//        if (!vect.empty()) {
-//            answer = vect.back();
-//            vect.pop_back();
-//            locker_vect.unlock();
-//            break;
-//        }
-//        locker_vect.unlock();
-//    }
-//    return answer;
-//}
-
 template <typename return_type, typename ... arg_types>
 std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool>
                                        thread_pool<return_type, arg_types...>::concurrent_vector::wait_extract() {
     std::pair<std::function <return_type(arg_types...)>, arg_types... > answer;
     bool flag = false;
     while (true) {
-        std::unique_lock<std::mutex> locker(locker_vect);//, defer_lock);
-//        if (vect.empty() && pool_ptr->state == FINISHED) {
-//            flag = false;
-//            break;
-//        }
-        queuecheck.wait(locker);//, [this](){return !vect.empty() || pool_ptr->state != ALLOWED;});
-        if (!vect.empty()) {
-            answer = vect.back();
-            vect.pop_back();
+        std::unique_lock<std::mutex> locker(locker_vect);
+        queuecheck.wait(locker);
+        if (!ordinary_queue.empty()) {
+            answer = ordinary_queue.front();
+            ordinary_queue.pop();
             flag = true;
             break;
         } else {
-            if (pool_ptr->state == ALLOWED || pool_ptr->state == FINISHED) {
+            if (pool_ptr.state == ALLOWED || pool_ptr.state == FINISHED) {
                 flag = false;
                 break;
-                std::cout <<"BREAK"<<std::endl;
             }
         }
     }
     return  std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool >(answer, flag);
 }
 
-
-
-//template <typename return_type, typename ... arg_types>
-//std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool >
-//                                       thread_pool<return_type, arg_types...>::concurrent_vector::try_extract() {
-//    std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> answer;
-//    answer.second = false;
-//    if (locker_vect.try_lock()) {
-//        if (!vect.empty()) {
-//            answer.second = true;
-//            answer.first = vect.back();
-//            vect.pop_back();
-//            locker_vect.unlock();
-//        }
-//    }
-//    return answer;
-//}
-
-
+/*d: добавление задачи в очередь
+ *по мере добавления делаем notify_one, сигнализируя простаивающим потокам о том, что очередь пополнена
+*/
 template <typename return_type, typename ... arg_types>
 void thread_pool<return_type, arg_types...>::concurrent_vector::push(std::pair<std::function<return_type(arg_types ...) >, arg_types...  > func_with_args) {
     locker_vect.lock();
-    vect.push_back(func_with_args);
+    ordinary_queue.push(func_with_args);
     locker_vect.unlock();
     queuecheck.notify_one();
 }
 
-
+/*d: исчерпвание очереди
+ * если пользователь сообщил, что не собирается добавлять задачи в пул, нужно доделать скопившиеся задачи.
+ * в первом цикле простаивающие потоки будятся до тех пор, пока все задачи не будкт выполнены,
+ * выполнение задач до опустошения очереди происходят в "штатном" для executant_thread режиме.
+ * По опустошении очереди ставится пометка ALLOWED. После этого мы знаем, что пока state_of_thread != 0
+ * либо поток стоит в ожидании доступа к очереди и его нужно будить для корректного завершения,
+ * либо что он выполняет последнюю для себя задачу и notify  никак не повлияет на его работу
+*/
 template <typename return_type, typename ... arg_types>
 void thread_pool<return_type, arg_types...>::concurrent_vector::allow_to_exhaust() {
-    while (!vect.empty()) {
+    while (!ordinary_queue.empty()) {
         queuecheck.notify_one();
     }
-    pool_ptr->state = ALLOWED;
-    std::cout<<"end"<<std::endl;
-    for (int i = 0; i < pool_ptr->state_of_thread.size(); ++i) {
-        std::cout<<"while before"<<std::endl;
-        while (pool_ptr->state_of_thread[i]) {
-           std::cout<<"while in"<<std::endl;
+    pool_ptr.state = ALLOWED;
+    for (unsigned int i = 0; i < pool_ptr.state_of_thread.size(); ++i) {
+        while (pool_ptr.state_of_thread[i]) {
            queuecheck.notify_all();
         }
-        std::cout<<"while after"<<std::endl;
     }
 }
 
@@ -248,7 +229,7 @@ int main()
     thread_pool<void, int> first_pool;
     for (int i = 0; i < number; ++i) {
         first_pool.execute(functor1(), i);
-        std::cout<<i<<std::endl;
+        //std::cout<<i<<std::endl;
     }
     first_pool.close();
     try {
