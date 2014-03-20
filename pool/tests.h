@@ -8,8 +8,7 @@ const int number  = 1000; // al: static const int - не подойдет? за�
 int check_array[number];
 
 struct functor1 {
-    void operator()(int i) {
-        int j;
+    void operator()(int i, int j) {
         for( int k = 0; k < 100000; k++ ) {//d:если сильно накрутить счётчик, работает медленно, но не виснет :)
             j+= 1;
         }
@@ -23,13 +22,13 @@ BOOST_AUTO_TEST_CASE( my_test )
     thread_pool first_pool;
 
     for (int i = 0; i < number; ++i) {
-        first_pool.execute<void, int>({functor1()}, i);
+        first_pool.execute<void, int>({functor1()}, i, 0);
     }
 
     first_pool.close();
 
     try {
-        first_pool.execute<void, int>({functor1()}, 0);
+        first_pool.execute<void, int, int>({functor1()}, 0, 1);
         BOOST_FAIL("Ожидалось исключение из-за попытки работать с закрытым ресурсом");
     } catch (my::exception exp) {
     }
