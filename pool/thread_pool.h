@@ -9,6 +9,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include <functional>
 #include <assert.h>
 #include <tests.h>
 
@@ -29,9 +30,6 @@ public:
 }
 
 
-
-
-template <typename return_type, typename ... arg_types>
 class thread_pool  {
 
     /*d: Общая идея: при запуске thread_pool создаётся некоторое количество
@@ -48,15 +46,13 @@ class thread_pool  {
         ~executant_thread() {}
         void operator()() {
             while(true) {
-                ////std::cout << "Try get" << std::endl;
                 if (pool_ptr.state == ALLOWED) {
                     break;
                 }
-                typename std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> funct = pool_ptr.
+                std::pair<std::function <void(void)>, bool> funct = pool_ptr.
                         tasks.wait_extract();
                 if (funct.second) {
-                    ////std:: cout << "Success" << std::endl;
-                    funct.first.first(funct.first.second);
+                    funct.first();
                 }
             }
         }
@@ -67,17 +63,16 @@ class thread_pool  {
      *Реализация методов после класса thread_pool
      */
     class concurrent_vector {
-        std::queue<std::pair<std::function<return_type(arg_types ...) >, arg_types...  > > ordinary_queue;
+        std::queue<std::function<void(void)> > ordinary_queue;
         std::mutex locker_vect;
         std::condition_variable queuecheck;
         thread_pool& pool_ptr;
 
     public:
-        concurrent_vector(){}
         concurrent_vector(thread_pool& _pool_ptr):pool_ptr(_pool_ptr) {}
         ~concurrent_vector() {}
-        std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool> wait_extract();
-        void push(std::pair<std::function<return_type(arg_types ...) >, arg_types...  > func_with_args);
+        std::pair<std::function <void(void)>, bool> wait_extract();
+        void push(std::function<void(void)> func_with_args);
         void allow_to_exhaust();
         bool empty() {
             return ordinary_queue.empty();
@@ -115,6 +110,7 @@ public :
         }
     }
 
+    template <typename return_type, typename ... arg_types>
     void execute(std::function<return_type(arg_types...)> func, arg_types ... args) {
         if (state == NON_STARTED) {
             this->start();
@@ -122,24 +118,23 @@ public :
         if (state != STARTED) {
             throw (my::exception("Wrong state: STARTED is expected. May be this pool was closed"));
         }
-        tasks.push(std::make_pair(func, args...));
+        tasks.push(std::bind(func, args...));
     }
 
     void close() {
         tasks.allow_to_exhaust();
         for (unsigned int i = 0; i < executant_threads.size(); ++i) {
             executant_threads[i].join();
-            std::cout<<"нить завершилась"<<std::endl;
         }
         state = CLOSED;
     }
 };
 
 
-template <typename return_type, typename ... arg_types>
-std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool>
-                                       thread_pool<return_type, arg_types...>::concurrent_vector::wait_extract() {
-    std::pair<std::function <return_type(arg_types...)>, arg_types... > answer;
+
+std::pair<std::function <void(void)>, bool>
+                                       thread_pool::concurrent_vector::wait_extract() {
+    std::function <void(void)> answer;
     bool flag = false;
     while (true) {
         std::unique_lock<std::mutex> locker(locker_vect);
@@ -156,23 +151,21 @@ std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, b
             }
         }
     }
-    return  std::pair<std::pair<std::function <return_type(arg_types...)>, arg_types... >, bool >(answer, flag);
+    return std::pair<std::function <void(void)>, bool>(answer, flag);
 }
 
 /*d: добавление задачи в очередь
  *по мере добавления делаем notify_one, сигнализируя простаивающим потокам о том, что очередь пополнена
 */
-template <typename return_type, typename ... arg_types>
-void thread_pool<return_type, arg_types...>::concurrent_vector::push(std::pair<std::function<return_type(arg_types ...) >, arg_types...  > func_with_args) {
+
+void thread_pool::concurrent_vector::push(std::function<void(void) > func) {
     locker_vect.lock();
-    ordinary_queue.push(func_with_args);
+    ordinary_queue.push(func);
     locker_vect.unlock();
     queuecheck.notify_one();
 }
 
-template <typename return_type, typename ... arg_types>
-void thread_pool<return_type, arg_types...>::concurrent_vector::allow_to_exhaust() {
-    std::cout<<"ALLOW START"<<std::endl;
+void thread_pool::concurrent_vector::allow_to_exhaust() {
     while (!ordinary_queue.empty()) {
         queuecheck.notify_one();
     }

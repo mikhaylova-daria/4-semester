@@ -4,7 +4,7 @@
 #define BOOST_TEST_MODULE MyTest
 #include <boost/test/included/unit_test.hpp>
 
-const int number  = 100000; // al: static const int - не подойдет? зачем дефайн?
+const int number  = 1000; // al: static const int - не подойдет? зачем дефайн?
 int check_array[number];
 
 struct functor1 {
@@ -20,22 +20,23 @@ struct functor1 {
 
 BOOST_AUTO_TEST_CASE( my_test )
 {
-    std::cout<<"!!!"<<std::endl;
-    thread_pool<void, int> first_pool;
+    thread_pool first_pool;
+
     for (int i = 0; i < number; ++i) {
-        first_pool.execute(functor1(), i);
+        first_pool.execute<void, int>({functor1()}, i);
     }
+
     first_pool.close();
-//        try {
-//            first_pool.execute(functor1(), 0);
-//        } catch (my::exception exp) {
-//            std::cout<<exp.what()<<std::endl;
-//        }
 
-       // for (int i = 1; i < number; ++i) {
-    //BOOST_CHECK_EQUAL(3, 4);
-      //  }
+    try {
+        first_pool.execute<void, int>({functor1()}, 0);
+        BOOST_FAIL("Ожидалось исключение из-за попытки работать с закрытым ресурсом");
+    } catch (my::exception exp) {
+    }
 
-  //BOOST_CHECK( test_object.is_valid() );
+    for (int i = 1; i < number; ++i) {
+        BOOST_CHECK_EQUAL(check_array[i], i);
+    }
+
 }
 #endif // TESTS_H
