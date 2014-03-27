@@ -70,6 +70,17 @@ private:
     void sift_down(unsigned int i) {
         Key_t left = INFINITY;
         Key_t right = INFINITY;
+        if (i == 0) {
+            std::cout<<"0000"<<std::endl;
+        }
+        if (2*i+1 >= lockers_for_position.size()) {
+            if (i == 0) {
+                std::cout<<"00"<<std::endl;
+            }
+            lockers_for_position[i]->unlock();
+            return;
+        }
+        std::cout <<"+++"<<i<<std::endl;
         lockers_for_position[2 * i + 1]->lock();
         lockers_for_position[2 * i + 2]->lock();
         if (2 * i + 1 <= heap.size()) {
@@ -82,6 +93,10 @@ private:
             lockers_for_position[i]->unlock();
             lockers_for_position[2 * i + 1]->unlock();
             lockers_for_position[2 * i + 2]->unlock();
+            std::cout <<"***"<<std::endl;
+            if (i == 0) {
+                std::cout<<"00"<<std::endl;
+            }
             return;
         }
         if (right <= left && right < heap[i]->key) {
@@ -92,6 +107,9 @@ private:
            swap(heap[2 * i + 1], heap[i]);
            sift_down(2 * i + 1);
         }
+        std::cout <<"---"<<std::endl;
+        lockers_for_position[i]->unlock();
+
     }
 
 
@@ -133,18 +151,20 @@ public:
             boost::unique_lock<boost::mutex> locker;
             cond_var_extract.wait(locker);
         }
-        std::cout <<"^^^^"<<heap[0]->key<<std::endl;
+        std::cout <<"№"<<heap[0]->key<<std::endl;
         std::pair<Key_t, Val_t> min(heap[0]->key, heap[0]->value);
         std::cout <<"^^^^"<<std::endl;
         heap[0] = heap.back();
         heap.pop_back();
-        std::cout <<"^^^^"<<std::endl;
+        std::cout <<"%"<<std::endl;
         lockers_for_position[0]->lock();
-        std::cout <<"^^^^"<<std::endl;
+        std::cout <<";;;"<<std::endl;
         sift_down(0);
-        cond_var_insert.notify_all();
-        state == UP;
-        cond_var_insert.notify_all();
+        std::cout <<"йц"<<std::endl;
+
+       /// cond_var_insert.notify_all();
+        state = UP;
+       /// cond_var_insert.notify_all();
         locker_for_extract.unlock();
         return min;
     }
@@ -170,9 +190,9 @@ int main()
         gr.add_thread(new boost::thread(functor1(), i));
     }
     gr.join_all();
-//        for (int i = 0; i <= 123; ++i){
-//            cout<<heap.extract_min().first<<std::endl;
-//        }
+        for (int i = 0; i <= 123; ++i){
+            cout<<heap.extract_min().first<<std::endl;
+        }
     std::cout<<heap.heap[0]->key<<std::endl;
 //    for (int i = 0; i <= 123; ++i){
 //        cout<<heap.extract_min().first<<std::endl;
