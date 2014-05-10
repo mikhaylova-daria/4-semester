@@ -5,7 +5,8 @@ CONFIG -= qt
 
 
 QMAKE_CXXFLAGS += -std=c++11
-LIBS += -lboost_thread
+LIBS += \-lboost_thread
+        \-o3
 
 SOURCES += main.cpp
 
