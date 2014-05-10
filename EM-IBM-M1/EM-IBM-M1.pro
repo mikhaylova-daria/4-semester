@@ -4,7 +4,8 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 
-QMAKE_CXXFLAGS += -std=c++11
+QMAKE_CXXFLAGS += \-std=c++11
+            \-o3
 LIBS += \-lboost_thread
         \-o3
 

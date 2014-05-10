@@ -251,12 +251,12 @@ public:
             team.add_thread(new boost::thread({computer_of_intermediate_parametrs(this, i, number_of_process - 1)}));
         }
         team.join_all();
-        std::cout<<c_e_f.begin()->second[0]<<" " <<this->c_e_f.begin()->second[1]<<" "<<c_e_f.begin()->second[1]<<" "<<c_e_f.begin()->second[3]<<std::endl;
+       // std::cout<<c_e_f.begin()->second[0]<<" " <<this->c_e_f.begin()->second[1]<<" "<<c_e_f.begin()->second[2]<<" "<<c_e_f.begin()->second[3]<<std::endl;
         for (int i = 0; i < number_of_process - 1; ++i) {
             team.add_thread(new boost::thread({sum_of_intermediate_parametrs(this, i, number_of_process - 1)}));
         }
         team.join_all();
-        std::cout<<c_e_f.begin()->second[0]<<" " <<this->c_e_f.begin()->second[1]<<" "<<c_e_f.begin()->second[1]<<" "<<c_e_f.begin()->second[3]<<std::endl;
+     //   std::cout<<c_e_f.begin()->second[0]<<" " <<this->c_e_f.begin()->second[1]<<" "<<c_e_f.begin()->second[2]<<" "<<c_e_f.begin()->second[3]<<std::endl;
 
     }
 
@@ -266,12 +266,12 @@ public:
         this->recompute_delta();
         this->recompute_intermediate_parametrs();
         this->reassesse_parametres();
-        std::cout<<c.begin()->second[0]<<" "<<c.begin()->second[1]<<" "<<c_e_f.begin()->second[0]<<std::endl;
+        //std::cout<<c.begin()->second[0]<<" "<<c.begin()->second[1]<<" "<<c_e_f.begin()->second[0]<<std::endl;
         for (int t = 0; t < 5; ++t) {
             this->initialize_subparameters();
             std::cout<<c.begin()->second[0]<<" "<<c.begin()->second[1]<<" "<<c_e_f.begin()->second[0]<<std::endl;
             this->recompute_delta();
-            std::cout<<"1"<<std::endl;
+         //   std::cout<<"1"<<std::endl;
             this->recompute_intermediate_parametrs();
             std::cout<<c.begin()->second[0]<<" "<<c.begin()->second[1]<<" "<<c_e_f.begin()->second[0]<<std::endl;
             this->reassesse_parametres();
