@@ -2,12 +2,18 @@
 #define CORPUS_READER_H
 #include <fstream>
 #include <vector>
-#include <ctype.h>
-
+#include <map>
+//#include <ctype.h>
+std::map<std::string, unsigned int> sourse_dictionary;
+std::map<std::string, unsigned int> target_dictionary;
+std::map<unsigned int, std::string> sourse_dictionary_decod;
+std::map<unsigned int, std::string> target_dictionary_decod;
 class corpus_reader {
     std::ifstream i_stream;
     bool eof_flag = false;
     bool finish_sentense_flag = false;
+    unsigned int sourse_dictionary_size = 0;
+    unsigned int target_dictionary_size = 0;
 public:
     corpus_reader(const char* input_file_name):i_stream(input_file_name) {
     }
@@ -31,18 +37,32 @@ public:
         return word;
     }
 
-    std::pair<std::vector<std::string>, std::vector<std::string> > read_sentenses() {
-        std::vector<std::string> sentense_sourse_lang;
-        std::vector<std::string> sentense_target_lang;
+    std::pair<std::vector<unsigned int>, std::vector<unsigned int> > read_sentenses() {
+        std::vector<unsigned int> sentense_sourse_lang;
+        std::vector<unsigned int> sentense_target_lang;
         while (!finish_sentense_flag) {
-            sentense_sourse_lang.push_back(read_word());
+            std::string word = read_word();
+            std::pair<std::map<std::string, unsigned int>::iterator, bool> insert_itr = sourse_dictionary.insert
+                    (std::pair<std::string, unsigned int>(word, sourse_dictionary_size));
+            if (insert_itr.second) {
+                sourse_dictionary_decod.insert(std::pair<unsigned int, std::string>(sourse_dictionary_size, word));
+                ++sourse_dictionary_size;
+            }
+            sentense_sourse_lang.push_back(insert_itr.first->second);
         }
         finish_sentense_flag = false;
         while (!finish_sentense_flag) {
-            sentense_target_lang.push_back(read_word());
+            std::string word = read_word();
+            std::pair<std::map<std::string, unsigned int>::iterator, bool> insert_itr = target_dictionary.insert
+                    (std::pair<std::string, unsigned int>(word, target_dictionary_size));
+            if (insert_itr.second) {
+                target_dictionary_decod.insert(std::pair<unsigned int, std::string>(target_dictionary_size, word));
+                ++target_dictionary_size;
+            }
+            sentense_target_lang.push_back(insert_itr.first->second);
         }
         finish_sentense_flag = false;
-        return std::make_pair < std::vector<std::string>, std::vector<std::string> >
+        return std::make_pair < std::vector<unsigned int>, std::vector<unsigned int> >
                 (std::move(sentense_sourse_lang), std::move(sentense_target_lang));
     }
 

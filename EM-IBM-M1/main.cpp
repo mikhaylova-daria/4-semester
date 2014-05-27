@@ -5,14 +5,14 @@
 #include <functional>
 #include <unordered_map>
 #include <boost/thread.hpp>
-#include <test.h>
+//#include <test.h>
 
 
 int main()
 {
     IBM ibm;
     ibm.make_align();
-    report();
+  //  report();
     return 0;
 }
 

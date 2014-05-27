@@ -17,16 +17,26 @@ struct hash {
     }
 };
 
+struct hash_int_pair {
+    std::hash<unsigned int> hasher;
+    size_t operator()(const std::pair<unsigned int, unsigned int>& p) const {
+        unsigned long long conc;
+        conc = p.first * 10000000 + p.second;
+        size_t answer = hasher(conc);
+        return answer;
+    }
+};
+
 class IBM {
 public:
-    std::unordered_map<std::pair<std::string, std::string>, std::vector<float>, hash> c_e_f;
-    std::unordered_map<std::string, std::vector<float>> c;
-    std::unordered_map<std::pair<std::string, std::string>, float, hash> t_map;
+    std::unordered_map<std::pair<unsigned int, unsigned int>, std::vector<float>, hash_int_pair> c_e_f;
+    std::unordered_map<unsigned int, std::vector<float>> c;
+    std::unordered_map<std::pair<unsigned int, unsigned int>, float, hash_int_pair> t_map;
     std::vector<std::vector<std::vector<float>>> delta;
     std::vector<std::vector<std::vector<std::vector<std::vector<float>>>>> c_j_ilm;
     std::vector<std::vector<std::vector<std::vector<float>>>> c_ilm;
     std::vector<std::vector<std::vector<std::vector<float>>>> q;
-    std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> corpus;
+    std::vector<std::pair<std::vector<unsigned int>, std::vector<unsigned int>>> corpus;
     std::vector<std::vector<std::vector<int>>> align;
     corpus_reader reader;
     unsigned int size_of_corpus = 0;
@@ -40,7 +50,7 @@ public:
     ~IBM(){}
 
     void read() {
-        std::pair<std::vector<std::string>, std::vector<std::string>> p;
+        std::pair<std::vector<unsigned int>, std::vector<unsigned int>> p;
         while (!reader.eof()) {
             p = reader.read_sentenses();
             if (p.first.size() > max_length_e) {
@@ -74,7 +84,7 @@ public:
         this->print_results();
     }
 
-    void print_results() {
+   void print_results() {
         std::ofstream f("output.txt");
         std::vector<int> al_for_sent;
         float max = 0;
@@ -84,7 +94,7 @@ public:
                 al_for_sent.clear();
                 max = 0;
                 for (int j = 0; j < corpus[k].first.size(); ++j) {
-                    y = t_map.find(std::pair<std::string, std::string>(corpus[k].first[j], corpus[k].second[i]))->second
+                    y = t_map.find(std::pair<unsigned int, unsigned int>(corpus[k].first[j], corpus[k].second[i]))->second
                                             * q[j][i][corpus[k].first.size() - 1][corpus[k].second.size() - 1];
                     if (y > max) {
                         al_for_sent.clear();
@@ -101,11 +111,11 @@ public:
         }
         for (unsigned int k = 0; k < corpus.size(); ++k) {
             for (unsigned int j = 0; j < corpus[k].first.size(); ++j) {
-                f<<corpus[k].first[j]<<" ";
+                f<<(sourse_dictionary_decod.find(corpus[k].first[j])->second)<<" ";
             }
             f<<std::endl;
             for (unsigned int i = 0; i < corpus[k].second.size(); ++i) {
-                f<<corpus[k].second[i]<<" ";
+                f<<(target_dictionary_decod.find(corpus[k].second[i])->second)<<" ";
             }
             f<<std::endl;
             for (unsigned int i = 0; i < corpus[k].second.size() - 1; ++i) {
@@ -151,10 +161,10 @@ private:
             if (number == 1) {
                 for (unsigned int k = 0; k < parent->size_of_corpus; ++k) {
                     for (unsigned int i = 0 ; i < parent->corpus[k].first.size(); ++i) {
-                        parent->c.insert(std::pair<std::string, std::vector<float>> (parent->corpus[k].first[i], c_inic));
+                        parent->c.insert(std::pair<unsigned int, std::vector<float>> (parent->corpus[k].first[i], c_inic));
                         for ( unsigned int j = 0; j < parent->corpus[k].second.size(); ++j) {
-                            parent->c_e_f.insert(std::pair<std::pair<std::string, std::string>, std::vector<float>>
-                                         (std::pair<std::string, std::string> (parent->corpus[k].first[i],
+                            parent->c_e_f.insert(std::pair<std::pair<unsigned int, unsigned int>, std::vector<float>>
+                                         (std::pair<unsigned int, unsigned int> (parent->corpus[k].first[i],
                                                                                parent->corpus[k].second[j]), c_inic));
                         }
                     }
@@ -163,8 +173,8 @@ private:
                 for (unsigned int k = 0; k < parent->size_of_corpus; ++k) {
                     for (unsigned int i = 0 ; i < parent->corpus[k].first.size(); ++i) {
                         for (unsigned int j = 0; j < parent->corpus[k].second.size(); ++j) {
-                            parent->t_map.insert(std::pair<std::pair<std::string, std::string>, float>
-                                         (std::pair<std::string, std::string> (parent->corpus[k].first[i],
+                            parent->t_map.insert(std::pair<std::pair<unsigned int, unsigned int>, float>
+                                         (std::pair<unsigned int, unsigned int> (parent->corpus[k].first[i],
                                                                                parent->corpus[k].second[j]), 0.3));
                         }
                     }
@@ -186,13 +196,13 @@ private:
                 for (unsigned int i = 0; i < parent->corpus[k].second.size(); ++i) {
                     float sum = 0;
                     for (unsigned int j = 0; j < parent->corpus[k].first.size(); ++j) {
-                        sum += parent->t_map.find(std::pair<std::string, std::string>
+                        sum += parent->t_map.find(std::pair<unsigned int, unsigned int>
                                                   (parent->corpus[k].first[j], parent->corpus[k].second[i]))->second;
                     }
                     //    std::cout<<sum<<std::endl;
 
                     for (unsigned int j = 0; j < parent->corpus[k].first.size(); ++j) {
-                        parent->delta[k][i][j] = parent->t_map.find(std::pair<std::string, std::string>
+                        parent->delta[k][i][j] = parent->t_map.find(std::pair<unsigned int, unsigned int>
                                (parent->corpus[k].first[j], parent->corpus[k].second[i]))->second/sum;
                     }
                 }
@@ -214,7 +224,7 @@ private:
                 for (unsigned int i = 0; i < parent->corpus[k].second.size(); ++i) {
                     for (unsigned int j = 0; j < parent->corpus[k].first.size(); ++j) {
                         parent->c.find(parent->corpus[k].first[j])->second[start + 1] += parent->delta[k][i][j];
-                        parent->c_e_f.find(std::pair<std::string, std::string>
+                        parent->c_e_f.find(std::pair<unsigned int, unsigned int>
                                            (parent->corpus[k].first[j], parent->corpus[k].second[i]))->second[start + 1]
                                 += parent->delta[k][i][j];
                     }
@@ -231,8 +241,8 @@ private:
             parent(_parent), number(_number) {
         }
         void operator()(){
-            std::unordered_map<std::pair<std::string, std::string>, std::vector<float>, hash>::iterator itr_c_e_f;
-            std::unordered_map<std::string, std::vector<float>>::iterator itr_c;
+            std::unordered_map<std::pair<unsigned int, unsigned int>, std::vector<float>, hash_int_pair>::iterator itr_c_e_f;
+            std::unordered_map<unsigned int, std::vector<float>>::iterator itr_c;
             if (number == 1) {
                 for (itr_c = parent->c.begin(); itr_c != parent->c.end(); ++itr_c) {
                     itr_c->second[0] = 0;
@@ -358,8 +368,8 @@ private:
             parent(_parent), number(_number) {
         }
         void operator()(){
-            std::unordered_map<std::pair<std::string, std::string>, std::vector<float>, hash>::iterator itr_c_e_f;
-            std::unordered_map<std::string, std::vector<float>>::iterator itr_c;
+            std::unordered_map<std::pair<unsigned int, unsigned int>, std::vector<float>, hash_int_pair>::iterator itr_c_e_f;
+            std::unordered_map<unsigned int, std::vector<float>>::iterator itr_c;
             if (number == 1) {
                 for (itr_c = parent->c.begin(); itr_c != parent->c.end(); ++itr_c) {
                     for (unsigned int i = 0; i < itr_c->second.size(); ++i) {
@@ -385,7 +395,7 @@ private:
             parent(_parent), start(number_of_start_sentense), step(_step){
         }
         void operator()(){
-            std::unordered_map<std::pair<std::string, std::string>, float, hash>::iterator itr;
+            std::unordered_map<std::pair<unsigned int, unsigned int>, float, hash_int_pair>::iterator itr;
             itr = parent->t_map.begin();
             for (unsigned int i = 0; i < start && itr != parent->t_map.end() ; ++i) {
                 ++itr;
