@@ -57,6 +57,69 @@ public:
         }
     }
 
+
+    void  make_align() {
+        this->read();
+        this->initialize();
+        this->recompute_delta();
+        this->recompute_intermediate_parametrs();
+        this->reassesse_parameters();
+        for (unsigned int t = 0; t < 5; ++t) {
+            this->initialize_subparameters();
+            this->recompute_delta();
+            this->recompute_intermediate_parametrs();
+            this->reassesse_parameters();
+        }
+        this->compute_parameters_q();
+        this->print_results();
+    }
+
+    void print_results() {
+        std::ofstream f("output.txt");
+        std::vector<int> al_for_sent;
+        float max = 0;
+        float y;
+        for (int k = 0; k < corpus.size(); ++k) {
+            for (int i = 0; i < corpus[k].second.size(); ++i) {
+                al_for_sent.clear();
+                max = 0;
+                for (int j = 0; j < corpus[k].first.size(); ++j) {
+                    y = t_map.find(std::pair<std::string, std::string>(corpus[k].first[j], corpus[k].second[i]))->second
+                                            * q[j][i][corpus[k].first.size() - 1][corpus[k].second.size() - 1];
+                    if (y > max) {
+                        al_for_sent.clear();
+                        max = y;
+                        al_for_sent.push_back(j);
+                    } else {
+                        if (y == max) {
+                            al_for_sent.push_back(j);
+                        }
+                    }
+                }
+                align[k][i] = al_for_sent;
+            }
+        }
+        for (unsigned int k = 0; k < corpus.size(); ++k) {
+            for (unsigned int j = 0; j < corpus[k].first.size(); ++j) {
+                f<<corpus[k].first[j]<<" ";
+            }
+            f<<std::endl;
+            for (unsigned int i = 0; i < corpus[k].second.size(); ++i) {
+                f<<corpus[k].second[i]<<" ";
+            }
+            f<<std::endl;
+            for (unsigned int i = 0; i < corpus[k].second.size() - 1; ++i) {
+                for (unsigned int h = 0; h < align[k][i].size(); ++h) {
+                    f<<align[k][i][h]<<"-"<<i<<" ";
+                }
+            }
+            f<<std::endl;
+        }
+
+    }
+
+private:
+
     class initializer_delta {
         IBM* parent;
         unsigned int start;
@@ -154,7 +217,6 @@ public:
                         parent->c_e_f.find(std::pair<std::string, std::string>
                                            (parent->corpus[k].first[j], parent->corpus[k].second[i]))->second[start + 1]
                                 += parent->delta[k][i][j];
-                   //     std::cout<<parent->delta[k][i][j]<<std::endl;
                     }
                 }
             }
@@ -314,12 +376,12 @@ public:
         }
     };
 
-    class reassesser {
+    class reassesser_t {
         IBM* parent;
         unsigned int start;
         unsigned int step;
     public:
-        reassesser(IBM* _parent, unsigned int number_of_start_sentense, unsigned int _step):
+        reassesser_t(IBM* _parent, unsigned int number_of_start_sentense, unsigned int _step):
             parent(_parent), start(number_of_start_sentense), step(_step){
         }
         void operator()(){
@@ -362,7 +424,7 @@ public:
     void reassesse_parameters() {
         boost::thread_group team;
         for (unsigned int i = 0; i < number_of_process - 1; ++i) {
-            team.add_thread(new boost::thread({reassesser(this,i, number_of_process - 1)}));
+            team.add_thread(new boost::thread({reassesser_t(this,i, number_of_process - 1)}));
 
         }
         team.join_all();
@@ -407,68 +469,6 @@ public:
         team.join_all();
     }
 
-    void print_results() {
-        std::ofstream f("output.txt");
-        std::vector<int> al_for_sent;
-        float max = 0;
-        float y;
-        for (int k = 0; k < corpus.size(); ++k) {
-            for (int i = 0; i < corpus[k].second.size(); ++i) {
-                al_for_sent.clear();
-                max = 0;
-                for (int j = 0; j < corpus[k].first.size(); ++j) {
-                    y = t_map.find(std::pair<std::string, std::string>(corpus[k].first[j], corpus[k].second[i]))->second
-                                            * q[j][i][corpus[k].first.size() - 1][corpus[k].second.size() - 1];
-                    if (y > max) {
-                        al_for_sent.clear();
-                        max = y;
-                        al_for_sent.push_back(j);
-                    } else {
-                        if (y == max) {
-                            al_for_sent.push_back(j);
-                        }
-                    }
-                }
-                align[k][i] = al_for_sent;
-            }
-        }
-        for (unsigned int k = 0; k < corpus.size(); ++k) {
-            for (unsigned int j = 0; j < corpus[k].first.size(); ++j) {
-                f<<corpus[k].first[j]<<" ";
-            }
-            f<<std::endl;
-            for (unsigned int i = 0; i < corpus[k].second.size(); ++i) {
-                f<<corpus[k].second[i]<<" ";
-            }
-            f<<std::endl;
-            for (unsigned int i = 0; i < corpus[k].second.size() - 1; ++i) {
-                for (unsigned int h = 0; h < align[k][i].size(); ++h) {
-                    f<<align[k][i][h]<<"-"<<i<<" ";
-                }
-            }
-            f<<std::endl;
-        }
-
-    }
-
-
-
-    void  make_align() {
-        this->read();
-        this->initialize();
-        this->recompute_delta();
-        this->recompute_intermediate_parametrs();
-        this->reassesse_parameters();
-        for (unsigned int t = 0; t < 4; ++t) {
-            this->initialize_subparameters();
-            this->recompute_delta();
-            this->recompute_intermediate_parametrs();
-            this->reassesse_parameters();
-        }
-        this->compute_parameters_q();
-        this->print_results();
-        std::cout<<"end"<<std::endl;
-    }
 };
 
 
