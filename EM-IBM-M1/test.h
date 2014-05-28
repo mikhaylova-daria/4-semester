@@ -9,7 +9,7 @@ void report(const char* original_file = "/home/darya/Алгоритмы/build-EM
     corpus_reader original(original_file);
     corpus_reader result(result_file);
     std::ofstream output("output_test.txt");
-    std::pair<std::vector<std::string>, std::vector<std::string>> p;
+    std::pair<std::vector<unsigned int>, std::vector<unsigned int>> p;
     std::vector<std::string> original_al;
     std::vector<std::string> result_al;
     std::set<std::string> original_al_set;
@@ -35,11 +35,11 @@ void report(const char* original_file = "/home/darya/Алгоритмы/build-EM
             }
         }
         for (int i = 0; i < p.first.size(); ++i) {
-            output<<p.first[i]<<" ";
+            output<<sourse_dictionary_decod.find(p.first[i])->second<<" ";
         }
         output<<std::endl;
         for (int i = 0; i < p.second.size(); ++i) {
-            output<<p.second[i]<<" ";
+            output<<target_dictionary_decod.find(p.second[i])->second<<" ";
         }
         output<<std::endl;
         float current_result =(float)count_hits/(float)original_al.size();
@@ -48,11 +48,11 @@ void report(const char* original_file = "/home/darya/Алгоритмы/build-EM
         if (current_result < 0.5) {
             ++count_worst;
             for (int i = 0; i < p.first.size(); ++i) {
-                worst_results<<p.first[i]<<" ";
+                worst_results<<sourse_dictionary_decod.find(p.first[i])->second<<" ";
             }
             worst_results<<std::endl;
             for (int i = 0; i < p.second.size(); ++i) {
-                worst_results<<p.second[i]<<" ";
+                worst_results<<target_dictionary_decod.find(p.second[i])->second<<" ";
             }
             worst_results<<std::endl;
             worst_results<<current_result<<std::endl;
@@ -60,11 +60,11 @@ void report(const char* original_file = "/home/darya/Алгоритмы/build-EM
         if (current_result > 0.8) {
             ++count_best;
             for (int i = 0; i < p.first.size(); ++i) {
-                best_results<<p.first[i]<<" ";
+                best_results<<sourse_dictionary_decod.find(p.first[i])->second<<" ";
             }
             best_results<<std::endl;
             for (int i = 0; i < p.second.size(); ++i) {
-                best_results<<p.second[i]<<" ";
+                best_results<<target_dictionary_decod.find(p.second[i])->second<<" ";
             }
             best_results<<std::endl;
             best_results<<current_result<<std::endl;
